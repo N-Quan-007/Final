@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OWaste V17 - Smart Notification</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        /* --- 1. HUD & INSTRUCTIONS --- */
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 15px;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            pointer-events: none;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        h3 {
+            margin: 0 0 10px 0;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+        }
+
+        p {
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+
+        b {
+            color: #fff;
+        }
+
+        /* --- 2. SMARTPHONE OVERLAY --- */
+        #phone {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            height: 500px;
+            background: #111;
+            border-radius: 30px;
+            border: 8px solid #333;
+            box-shadow: -5px 5px 15px rgba(0,0,0,0.5);
+            overflow: hidden;
+            display: none; /* Hidden by default */
+            font-family: sans-serif;
+            transform: translateY(100%);
+            opacity: 0;
+            transition: transform 0.6s cubic-bezier(0.2,0.8,0.2,1), opacity 0.4s ease;
+            z-index: 20;
+        }
+            /* classes to animate show/hide */
+            #phone.phone-open {
+                display: block;
+                transform: translateY(0);
+                opacity: 1;
+            }
+
+            #phone.phone-closing {
+                transform: translateY(110%);
+                opacity: 0;
+                transition: transform 0.7s cubic-bezier(0.2,0.8,0.2,1), opacity 0.5s ease;
+            }
+
+        .screen {
+            background: #111;
+            height: 100%;
+            width: 100%;
+            position: relative;
+        }
+
+        .header {
+            background: #111;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            position: relative;
+        }
+
+        .phone-close {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #fff;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+            .phone-close:hover {
+                background: rgba(255,255,255,0.06);
+            }
+
+        .app-body {
+            padding: 15px;
+            color: #fff;
+        }
+
+        .notification-card {
+            background: #111;
+            border-left: 5px solid #444;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .food-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #fff;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            margin: 3px 0;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 2px;
+        }
+
+        .label {
+            color: #ccc;
+        }
+
+        .val {
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .alert {
+            color: #fff;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 0.85em;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">
+        <h3>0wastesmartfridge_G3_anh_hai</h3>
+        <p>• <color.yellow><b>Click Doors/Drawers</b></color.yellow> to Interact</p>
+        <p>• <color.yellow><b>Click on the guy</b></color.yellow> to launch Apple</p>
+        <p>• <color.yellow><b>Click on the 2 upper doors to open the </b></color.yellow> fresh food compartment</p>
+        <p>• <color.yellow><b>Click on the first drawer on the lower segment to open the </b></color.yellow> Crisper Drawer</p>
+        <p>• <color.yellow><b>Click on the second drawer on the lower segment to open the </b></color.yellow> freezer compartment</p>
+        <p>• <color.yellow><i>Feature: Auto-Detection & Notification</i></color.yellow></p>
+        <p>• <color.yellow><i>Tap on Mr Gold to command him to sit </i></color.yellow></p>
+    </div>
+
+    <div id="phone">
+        <div class="screen">
+            <div class="header">OWaste App <button id="phone-close" class="phone-close" aria-label="Close">×</button></div>
+            <div class="app-body">
+                <p style="font-size:0.8em; color:#ccc;">Today, 1:30 PM</p>
+
+                <div class="notification-card">
+                    <span class="food-title">🍎 New Item Detected</span>
+                    <div class="data-row"><span class="label">Item:</span> <span class="val">Fresh Apple</span></div>
+                    <div class="data-row"><span class="label">Weight:</span> <span class="val">150g</span></div>
+                    <div class="data-row"><span class="label">Calories:</span> <span class="val">78 kcal</span></div>
+                    <div class="data-row"><span class="label">Carbs:</span> <span class="val">21g</span></div>
+                    <div class="data-row"><span class="label">Fiber:</span> <span class="val">3.1g</span></div>
+                    <div class="data-row"><span class="label">Protein:</span> <span class="val">0.4g</span></div>
+                    <div class="data-row"><span class="label">Expiry:</span> <span class="val">4 Weeks</span></div>
+                    <div class="alert">✅ Data Logged via Camera & Scale</div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+        // --- 1. SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xd0e7f9);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(3.5, 3.2, 3.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 1.05, -1.5);
+
+        // --- 2. MATERIALS ---
+        const matExterior = new THREE.MeshStandardMaterial({ color: 0x595454, metalness: 0.3, roughness: 0.4 });
+        const matTable = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.4, roughness: 0.6 });
+        const matWall = new THREE.MeshStandardMaterial({ color: 0x969389, roughness: 0.9 });
+        const matFloor = new THREE.MeshStandardMaterial({ color: 0x222225, roughness: 0.8 });
+        const matPlasticBlue = new THREE.MeshStandardMaterial({ color: 0x003366, roughness: 0.4 });
+
+        // Dog
+        const matDogWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 });
+        const matDogPink = new THREE.MeshStandardMaterial({ color: 0xffcccc, roughness: 0.6 });
+        const matDogEye = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 });
+        const matEyeWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+        const matPupil = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.2 });
+        const matNose = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.5, roughness: 0.15 });
+        const matEarInner = new THREE.MeshStandardMaterial({ color: 0xffdddd, roughness: 0.7 });
+        const matSkin = new THREE.MeshStandardMaterial({ color: 0xffe0cc, roughness: 0.7 });
+        const matCollar = new THREE.MeshStandardMaterial({ color: 0x330000, roughness: 0.6 });
+
+        // Plants
+        const matTerracotta = new THREE.MeshStandardMaterial({ color: 0xcc6633, roughness: 0.9 });
+        const matLeaf = new THREE.MeshStandardMaterial({ color: 0x2d5a27, roughness: 0.7 });
+        const matSoil = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 1.0 });
+
+        // Fridge
+        const matInterior = new THREE.MeshStandardMaterial({ color: 0x8e8e8e, roughness: 0.6 });
+        const rim = new THREE.DirectionalLight(0xffffff, 0.4);
+        rim.position.set(-2, 2, -2);
+        scene.add(rim);
+        const matIcy = new THREE.MeshStandardMaterial({ color: 0xdff7ff, roughness: 0.25 });
+        const matGlass = new THREE.MeshPhysicalMaterial({ color: 0x223344, transmission: 0.7, transparent: true, opacity: 0.2, roughness: 0.2 });
+        // Screen material: render UI to a canvas and use as texture
+        const _screenCanvas = document.createElement('canvas'); _screenCanvas.width = 360; _screenCanvas.height = 640;
+        const _sc = _screenCanvas.getContext('2d');
+        function roundRect(x, y, w, h, r) { _sc.beginPath(); _sc.moveTo(x + r, y); _sc.arcTo(x + w, y, x + w, y + h, r); _sc.arcTo(x + w, y + h, x, y + h, r); _sc.arcTo(x, y + h, x, y, r); _sc.arcTo(x, y, x + w, y, r); _sc.closePath(); }
+        function drawScreen() {
+            // vivid bg
+            const g = _sc.createLinearGradient(0, 0, _screenCanvas.width, _screenCanvas.height);
+            g.addColorStop(0, '#0aa0c6'); g.addColorStop(1, '#1783a8');
+            _sc.fillStyle = g; _sc.fillRect(0, 0, _screenCanvas.width, _screenCanvas.height);
+
+            // top widgets
+            _sc.fillStyle = 'rgba(255,255,255,0.95)'; _sc.font = '14px sans-serif'; _sc.textAlign = 'right';
+            _sc.fillText('8:10', _screenCanvas.width - 12, 20);
+            _sc.save(); _sc.beginPath(); _sc.fillStyle = '#ffd24a'; _sc.shadowColor = 'rgba(0,0,0,0.18)'; _sc.shadowBlur = 6;
+            _sc.arc(_screenCanvas.width * 0.78, _screenCanvas.height * 0.12, 36, 0, Math.PI * 2); _sc.fill(); _sc.restore();
+            _sc.fillStyle = 'white'; _sc.textAlign = 'right'; _sc.font = 'bold 34px sans-serif'; _sc.fillText('64°', _screenCanvas.width * 0.73, _screenCanvas.height * 0.20);
+            _sc.font = '13px sans-serif'; _sc.fillText('Safer', _screenCanvas.width * 0.73, _screenCanvas.height * 0.235);
+
+            // larger, high-contrast tiles
+            const tileW = _screenCanvas.width * 0.44, tileH = 104;
+            const tileXLeft = _screenCanvas.width * 0.05;
+            const tileXRight = tileXLeft + tileW + 12;
+            const startY = 130;
+            _sc.font = 'bold 16px sans-serif';
+            const labels = [['Temperature', 'Humidity'], ['Slots Available', 'Anomalies']];
+
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 2; col++) {
+                    const tx = (col === 0) ? tileXLeft : tileXRight;
+                    const ty = startY + row * (tileH + 18);
+                    // tile bg
+                    _sc.fillStyle = 'rgba(255,255,255,0.12)'; roundRect(tx, ty, tileW, tileH, 12); _sc.fill();
+                    // icon slot
+                    const ix = tx + 12, iy = ty + 12, iSz = 64;
+                    _sc.fillStyle = 'rgba(255,255,255,0.2)'; roundRect(ix, iy, iSz, iSz, 10); _sc.fill();
+                    // draw icon
+                    _sc.save(); _sc.translate(ix + iSz / 2, iy + iSz / 2);
+                    const label = labels[row][col];
+                    if (label === 'Temperature') {
+                        _sc.fillStyle = '#ff6b6b'; _sc.beginPath(); _sc.arc(0, 8, 12, 0, Math.PI * 2); _sc.fill(); _sc.fillStyle = '#fff'; _sc.fillRect(-8, -14, 12, 28);
+                    } else if (label === 'Humidity') {
+                        _sc.fillStyle = '#4dc6ff'; _sc.beginPath(); _sc.moveTo(0, -16); _sc.quadraticCurveTo(14, 0, 0, 16); _sc.quadraticCurveTo(-14, 0, 0, -16); _sc.closePath(); _sc.fill();
+                    } else if (label === 'Slots Available') {
+                        _sc.fillStyle = '#ffffff';
+                        const s = 8, gap = 6;
+                        for (let yy = -10; yy <= 10; yy += (s + gap)) for (let xx = -12; xx <= 12; xx += (s + gap)) _sc.fillRect(xx, yy, s, s);
+                    } else if (label === 'Anomalies') {
+                        _sc.fillStyle = '#ffd24a'; _sc.beginPath(); _sc.moveTo(0, -14); _sc.lineTo(12, 12); _sc.lineTo(-12, 12); _sc.closePath(); _sc.fill(); _sc.fillStyle = '#111'; _sc.fillRect(-2, -2, 4, 8); _sc.beginPath(); _sc.arc(0, 10, 2, 0, Math.PI * 2); _sc.fill();
+                    }
+                    _sc.restore();
+
+                    // text (fitted)
+                    const textX = tx + 12 + iSz + 12;
+                    _sc.fillStyle = 'rgba(255,255,255,0.98)'; _sc.textAlign = 'left'; _sc.font = 'bold 15px sans-serif';
+                    let t = labels[row][col]; const maxW = tileW - (12 + iSz + 24);
+                    while (_sc.measureText(t).width > maxW && t.length > 3) t = t.slice(0, -1);
+                    if (t !== labels[row][col]) t = t.slice(0, -2) + '…';
+                    _sc.fillText(t, textX, ty + 40);
+
+                    _sc.fillStyle = 'rgba(255,255,255,0.75)'; _sc.font = '13px sans-serif';
+                    if (label === 'Temperature') _sc.fillText('64° F', textX, ty + 70);
+                    else if (label === 'Humidity') _sc.fillText('46% RH', textX, ty + 70);
+                    else if (label === 'Slots Available') _sc.fillText('3 of 6', textX, ty + 70);
+                    else if (label === 'Anomalies') _sc.fillText('0 detected', textX, ty + 70);
+                }
+            }
+
+            // small footer smiley
+            const smileY = startY + 2 * (tileH + 18) + 14;
+            const cx = _screenCanvas.width / 2, cy = smileY + 28;
+            _sc.save(); _sc.beginPath(); _sc.fillStyle = '#ffd24a'; _sc.arc(cx, cy, 20, 0, Math.PI * 2); _sc.fill(); _sc.fillStyle = '#111'; _sc.beginPath(); _sc.arc(cx - 6, cy - 6, 3, 0, Math.PI * 2); _sc.arc(cx + 6, cy - 6, 3, 0, Math.PI * 2); _sc.fill(); _sc.beginPath(); _sc.strokeStyle = '#111'; _sc.lineWidth = 2; _sc.arc(cx, cy + 2, 8, 0.25 * Math.PI, 0.75 * Math.PI); _sc.stroke(); _sc.restore();
+        }
+        drawScreen();
+        const _screenTexture = new THREE.CanvasTexture(_screenCanvas); _screenTexture.needsUpdate = true;
+        const matScreen = new THREE.MeshBasicMaterial({ map: _screenTexture });
+        setInterval(() => { drawScreen(); _screenTexture.needsUpdate = true; }, 250);
+        const matDark = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const matCamBody = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6, metalness: 0.2 });
+        const matCamLens = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.8 });
+
+        // --- 3. ENVIRONMENT ---
+        const kiosk = new THREE.Group(); scene.add(kiosk);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), matFloor);
+        floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; kiosk.add(floor);
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), matWall);
+        wall.position.set(0, 3, -4.0); wall.receiveShadow = true; kiosk.add(wall);
+
+        function createPlant(x, z) {
+            const grp = new THREE.Group(); grp.position.set(x, 0, z);
+            const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.35, 16), matTerracotta);
+            pot.position.y = 0.175; pot.castShadow = true; grp.add(pot);
+            const soil = new THREE.Mesh(new THREE.CircleGeometry(0.18, 16), matSoil);
+            soil.rotation.x = -Math.PI / 2; soil.position.y = 0.33; grp.add(soil);
+            const leafGeo = new THREE.DodecahedronGeometry(0.08);
+            for (let i = 0; i < 8; i++) {
+                const l = new THREE.Mesh(leafGeo, matLeaf);
+                l.position.set((Math.random() - 0.5) * 0.25, 0.35 + Math.random() * 0.3, (Math.random() - 0.5) * 0.25);
+                l.scale.setScalar(0.8 + Math.random() * 0.5); l.castShadow = true; grp.add(l);
+            }
+            return grp;
+        }
+        scene.add(createPlant(-0.8, -1.8)); scene.add(createPlant(0.8, -1.8));
+
+        const furnGroup = new THREE.Group(); furnGroup.position.set(-0.5, 0, -0.5); kiosk.add(furnGroup);
+        function makeStool(x, z) {
+            const s = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.45, 32), matPlasticBlue);
+            s.position.set(x, 0.225, z); s.castShadow = true; s.receiveShadow = true;
+            s.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.46, 16), new THREE.MeshBasicMaterial({ color: 0x333333 })).translateY(0));
+            return s;
+        }
+        furnGroup.add(makeStool(1.0, 0.8)); furnGroup.add(makeStool(1.8, 0.8)); furnGroup.add(makeStool(1.4, 1.4));
+        const table = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.8), matTable);
+        table.position.set(1.4, 0.7, 0.8); table.castShadow = true; table.receiveShadow = true;
+        furnGroup.add(table);
+        [[1.8, 1.1], [1.0, 1.1], [1.8, 0.5], [1.0, 0.5]].forEach(p => {
+            const l = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 16), matTable);
+            l.position.set(p[0], 0.35, p[1]); furnGroup.add(l);
+        });
+
+        // --- 4. MR. GOLD (BULL TERRIER) ---
+        const mrGold = new THREE.Group();
+        mrGold.name = "MR_GOLD"; // Name the group for raycasting
+        mrGold.position.set(-1.0, 0, 0.5); mrGold.rotation.y = Math.PI / 1.5; mrGold.scale.set(0.7, 0.7, 0.7); scene.add(mrGold);
+
+        // Store parts in userData for animation access
+        mrGold.userData = { legs: [] };
+
+        const body = new THREE.Mesh(new RoundedBoxGeometry(0.35, 0.45, 0.7, 4, 0.05), matDogWhite);
+        body.position.y = 0.45; body.castShadow = true; 
+        mrGold.add(body);
+        mrGold.userData.body = body; // Save ref
+
+        const headGroup = new THREE.Group(); headGroup.position.set(0, 0.7, 0.4); mrGold.add(headGroup);
+        mrGold.userData.head = headGroup; // Save ref
+
+        // refined snout/head for Mr Gold
+        const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.06, 0.38, 16), matDogWhite);
+        snout.rotation.x = -Math.PI / 2 + 0.28; snout.position.z = 0.155; snout.position.y = 0.06; snout.castShadow = true; headGroup.add(snout);
+        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.125, 16, 16), matDogWhite);
+        skull.scale.set(1.02, 0.92, 1.02);
+        skull.position.set(0, 0.09, -0.04); headGroup.add(skull);
+        const nose = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), matNose);
+        nose.position.set(0, -0.18, 0.02); nose.castShadow = true; snout.add(nose);
+        
+        // nostrils
+        const nostL = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8), matPupil); nostL.position.set(0.02, -0.18, 0.045); snout.add(nostL);
+        const nostR = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8), matPupil); nostR.position.set(-0.02, -0.18, 0.045); snout.add(nostR);
+
+        // eye whites + pupils
+        const eyeWhiteGeo = new THREE.SphereGeometry(0.018, 8, 8);
+        const pupilGeo = new THREE.SphereGeometry(0.007, 8, 8);
+        const lEyeWhite = new THREE.Mesh(eyeWhiteGeo, matEyeWhite); lEyeWhite.position.set(0.09, 0.05, 0.06); lEyeWhite.scale.set(1, 0.6, 1); lEyeWhite.rotation.x = -0.5; snout.add(lEyeWhite);
+        const lPupil = new THREE.Mesh(pupilGeo, matPupil); lPupil.position.set(0.09, 0.05, 0.075); snout.add(lPupil);
+        const rEyeWhite = new THREE.Mesh(eyeWhiteGeo, matEyeWhite); rEyeWhite.position.set(-0.09, 0.05, 0.06); rEyeWhite.scale.set(1, 0.6, 1); rEyeWhite.rotation.x = -0.5; snout.add(rEyeWhite);
+        const rPupil = new THREE.Mesh(pupilGeo, matPupil); rPupil.position.set(-0.09, 0.05, 0.075); snout.add(rPupil);
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, 0.01), matDogEye); mouth.position.set(0, -0.12, 0.07); snout.add(mouth);
+
+        const earGeo = new THREE.ConeGeometry(0.04, 0.12, 4);
+        const lEar = new THREE.Mesh(earGeo, matDogWhite); lEar.position.set(0.08, 0.22, 0); lEar.rotation.set(-0.35, 0.1, -0.45); headGroup.add(lEar);
+        const lEarInner = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), matEarInner); lEarInner.position.set(0.08, 0.215, 0.005); lEarInner.rotation.set(-0.35, 0.1, -0.45); headGroup.add(lEarInner);
+        const rEar = new THREE.Mesh(earGeo, matDogWhite); rEar.position.set(-0.08, 0.22, 0); rEar.rotation.set(-0.35, -0.1, 0.45); headGroup.add(rEar);
+        const rEarInner = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), matEarInner); rEarInner.position.set(-0.08, 0.215, 0.005); rEarInner.rotation.set(-0.35, -0.1, 0.45); headGroup.add(rEarInner);
+
+        // skin patches
+        const lSkinPatch = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), matSkin); lSkinPatch.position.set(0.06, 0.18, 0.02); lSkinPatch.scale.set(1, 0.6, 1); headGroup.add(lSkinPatch);
+        const rSkinPatch = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), matSkin); rSkinPatch.position.set(-0.06, 0.18, 0.02); rSkinPatch.scale.set(1, 0.6, 1); headGroup.add(rSkinPatch);
+        
+        const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 8, 20), matCollar);
+        collar.rotation.x = Math.PI / 2; collar.position.set(0, 0.58, 0.25); mrGold.add(collar);
+        
+        const legG = new THREE.CylinderGeometry(0.06, 0.05, 0.45, 16);
+        // [x, z] coordinates. Note: In this model Z+ is Forward (Head is at Z=0.4, Tail at -0.35)
+        // So [..., 0.25] are Front legs, [..., -0.25] are Back legs.
+        [[0.12, 0.25], [-0.12, 0.25], [0.12, -0.25], [-0.12, -0.25]].forEach((p, i) => {
+            const l = new THREE.Mesh(legG, matDogWhite); 
+            l.position.set(p[0], 0.225, p[1]); 
+            l.castShadow = true; 
+            mrGold.add(l);
+            mrGold.userData.legs.push(l); // Store in array: 0=FL, 1=FR, 2=BL, 3=BR
+        });
+        
+        const tailPivot = new THREE.Group(); tailPivot.position.set(0, 0.65, -0.35); mrGold.add(tailPivot);
+        const tailMesh = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.3, 8), matDogWhite);
+        tailMesh.rotation.x = -Math.PI / 2.5; tailMesh.position.set(0, 0, -0.15); tailPivot.add(tailMesh);
+        // --- 5. FRIDGE & DRAWERS ---
+        const fGroup = new THREE.Group(); fGroup.position.set(0, 0, -2.0); scene.add(fGroup);
+        const fW = 0.91, fH = 1.78, fD = 0.8, thick = 0.05;
+        const chassis = new THREE.Group(); fGroup.add(chassis);
+        chassis.add(new THREE.Mesh(new THREE.BoxGeometry(fW, fH, thick), matExterior).translateY(fH / 2).translateZ(-fD / 2));
+        chassis.add(new THREE.Mesh(new THREE.BoxGeometry(fW - 0.1, fH - 0.1, 0.01), matInterior).translateY(fH / 2).translateZ(-fD / 2 + 0.03));
+        chassis.add(new THREE.Mesh(new THREE.BoxGeometry(thick, fH, fD), matExterior).translateY(fH / 2).translateX(-fW / 2 + thick / 2));
+        chassis.add(new THREE.Mesh(new THREE.BoxGeometry(thick, fH, fD), matExterior).translateY(fH / 2).translateX(fW / 2 - thick / 2));
+        chassis.add(new THREE.Mesh(new THREE.BoxGeometry(fW, thick, fD), matExterior).translateY(fH - thick / 2));
+        chassis.add(new THREE.Mesh(new THREE.BoxGeometry(fW, thick, fD), matExterior).translateY(thick / 2));
+        chassis.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; });
+
+        const divY = fH * 0.4;
+        const divider = new THREE.Mesh(new THREE.BoxGeometry(fW - 0.12, 0.04, fD - 0.1), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+        divider.position.y = divY; divider.castShadow = true; fGroup.add(divider);
+        // Upper section shelves (4), white-blue glass (paler/clean)
+        const matShelf = new THREE.MeshStandardMaterial({ color: 0xe6f5ff, roughness: 0.7, transparent: true, opacity: 0.82 });
+        const shelfYs = [];
+        const shelfCount = 4;
+        const shelfSpacing = 0.22; // vertical spacing
+        const shelfStart = divY + 0.12;
+        for (let i = 0; i < shelfCount; i++) {
+            const sy = shelfStart + i * shelfSpacing;
+            const shelf = new THREE.Mesh(new THREE.BoxGeometry(fW - 0.15, 0.01, fD - 0.2), matShelf);
+            shelf.position.set(0, sy, -0.05); shelf.receiveShadow = true; fGroup.add(shelf);
+            shelfYs.push(sy);
+
+            // add simple items (vegetables / bowls) for variety
+            if (i === 0) {
+                // leafy greens
+                const veg = new THREE.Mesh(new THREE.DodecahedronGeometry(0.06), new THREE.MeshStandardMaterial({ color: 0x2e8b2e, roughness: 0.9 })); veg.position.set(-0.2, sy + 0.06, -0.05); fGroup.add(veg);
+                const veg2 = veg.clone(); veg2.position.set(-0.05, sy + 0.06, -0.1); fGroup.add(veg2);
+            } else if (i === 1) {
+                // meat bowl (simple brown bowl with steam - small sphere in bowl)
+                const bowl = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.03, 6, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })); bowl.rotation.x = Math.PI / 2; bowl.position.set(0.18, sy + 0.045, -0.08); fGroup.add(bowl);
+                const soup = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshStandardMaterial({ color: 0x8b3e2f, roughness: 0.9 })); soup.position.set(0.18, sy + 0.06, -0.08); fGroup.add(soup);
+            } else if (i === 2) {
+                // stacked cans/small boxes
+                const box = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.06), new THREE.MeshStandardMaterial({ color: 0xffcc66, roughness: 0.9 })); box.position.set(-0.22, sy + 0.035, -0.08); fGroup.add(box);
+            } else if (i === 3) {
+                // jar
+                const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0x7a4b21, roughness: 0.9 })); jar.position.set(0.15, sy + 0.04, -0.02); fGroup.add(jar);
+            }
+        }
+
+
+
+
+        const dH = fH - divY - 0.05, dW = (fW / 2) - 0.005, dD_door = 0.08;
+        const lHinge = new THREE.Group(); lHinge.name = "DOOR_LEFT"; lHinge.position.set(-fW / 2, divY + dH / 2 + 0.02, fD / 2 - 0.01); fGroup.add(lHinge);
+        const lDoor = new THREE.Mesh(new RoundedBoxGeometry(dW, dH, dD_door, 4, 0.01), matExterior); lDoor.position.x = dW / 2; lDoor.castShadow = true; lHinge.add(lDoor);
+        const lHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 16), matDark); lHandle.position.set(dW - 0.05, 0, dD_door/2 + 0.015); lHinge.add(lHandle);
+        // left door dispenser inset (black recessed module)
+        const dispenser = new THREE.Group(); dispenser.name = 'DISPENSER';
+        dispenser.position.set(dW / 2 - 0.06, 0.06, dD_door / 2 + 0.02);
+        // outer frame
+        const dispFrame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.34, 0.04), matDark); dispFrame.position.set(0, 0.04, 0); dispFrame.castShadow = true; dispenser.add(dispFrame);
+        // inner recess
+        const inner = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.18, 0.02), new THREE.MeshStandardMaterial({ color: 0x060606, roughness: 0.9 })); inner.position.set(0, -0.04, 0.012); dispenser.add(inner);
+        // spout cylinder
+        const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.08, 8), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 })); spout.rotation.x = Math.PI / 2; spout.position.set(0, -0.10, 0.018); dispenser.add(spout);
+        lHinge.add(dispenser);
+
+        const rHinge = new THREE.Group(); rHinge.name = "DOOR_RIGHT"; rHinge.position.set(fW / 2, divY + dH / 2 + 0.02, fD / 2 - 0.01); fGroup.add(rHinge);
+        const rDoor = new THREE.Mesh(new RoundedBoxGeometry(dW, dH, dD_door, 4, 0.01), matExterior); rDoor.position.x = -dW / 2; rDoor.castShadow = true; rHinge.add(rDoor);
+        const rScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.5), matScreen); rScreen.position.set(-dW / 2, 0.1, dD_door / 2 + 0.005); rHinge.add(rScreen);
+        const rHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 16), matDark); rHandle.position.set(-dW + 0.05, 0, dD_door/2 + 0.015); rHinge.add(rHandle);
+
+        const camGroup = new THREE.Group(); camGroup.position.set(-dW / 2, 0.2, -dD_door / 2 - 0.04); camGroup.rotation.set(THREE.MathUtils.degToRad(-15), Math.PI, 0); rHinge.add(camGroup);
+        const cBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.06), matCamBody); cBody.castShadow = true; camGroup.add(cBody);
+        const cLens = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.04, 16), matCamLens); cLens.rotation.x = Math.PI / 2; cLens.position.set(0, 0, 0.04); camGroup.add(cLens);
+        const cLight = new THREE.Mesh(new THREE.SphereGeometry(0.005), new THREE.MeshBasicMaterial({ color: 0xff0000 })); cLight.position.set(0.04, 0.01, 0.031); camGroup.add(cLight);
+
+        // inner door shelves (3 on each inner face of the upper doors)
+        const matDoorShelf = new THREE.MeshStandardMaterial({ color: 0xcfeeff, roughness: 0.45, transparent: true, opacity: 0.95 });
+        const doorShelfCount = 3;
+        const doorSpacing = dH / (doorShelfCount + 1);
+        const startDoorY = -dH / 2 + doorSpacing;
+        for (let i = 0; i < doorShelfCount; i++) {
+            const sy = startDoorY + i * doorSpacing;
+            // left door inner shelf (use negative Z to place on inner face)
+            const shelfL = new THREE.Mesh(new THREE.BoxGeometry(dW * 0.7, 0.01, 0.055), matDoorShelf);
+            const zInner = -dD_door / 2 - 0.015;
+            shelfL.position.set(dW / 2 - 0.03, sy, zInner); shelfL.receiveShadow = true; lHinge.add(shelfL);
+            // add simple cans on left door shelf (cola + pepsi)
+            const colaMat = new THREE.MeshStandardMaterial({ color: 0xcc1626, roughness: 0.35, metalness: 0.6 });
+            const pepsiMat = new THREE.MeshStandardMaterial({ color: 0x1247b0, roughness: 0.35, metalness: 0.6 });
+            const can1 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 16), colaMat); can1.position.set(dW / 2 - 0.15, sy + 0.04, zInner - 0.005); can1.castShadow = true; lHinge.add(can1);
+            const can2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 16), pepsiMat); can2.position.set(dW / 2 - 0.02, sy + 0.04, zInner - 0.005); can2.castShadow = true; lHinge.add(can2);
+
+            // right door inner shelf
+            const shelfR = shelfL.clone(); shelfR.position.set(-dW / 2 + 0.03, sy, zInner); rHinge.add(shelfR);
+            // cans on right door shelf (pepsi + cola)
+            const can3 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 16), pepsiMat); can3.position.set(-dW / 2 + 0.02, sy + 0.04, zInner - 0.005); can3.castShadow = true; rHinge.add(can3);
+            const can4 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 16), colaMat); can4.position.set(-dW / 2 + 0.15, sy + 0.04, zInner - 0.005); can4.castShadow = true; rHinge.add(can4);
+
+            // shiny tops
+            const top1 = new THREE.Mesh(new THREE.CircleGeometry(0.03, 12), new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.2, metalness: 0.8 })); top1.rotation.x = -Math.PI / 2; top1.position.set(dW / 2 - 0.15, sy + 0.08 + 0.001, zInner - 0.005); lHinge.add(top1);
+            const top2 = top1.clone(); top2.position.set(dW / 2 - 0.02, sy + 0.08 + 0.001, zInner - 0.005); lHinge.add(top2);
+            const top3 = top1.clone(); top3.position.set(-dW / 2 + 0.02, sy + 0.08 + 0.001, zInner - 0.005); rHinge.add(top3);
+            const top4 = top1.clone(); top4.position.set(-dW / 2 + 0.15, sy + 0.08 + 0.001, zInner - 0.005); rHinge.add(top4);
+        }
+
+        function createDrawerBin(w, h, d) {
+            const g = new THREE.Group();
+            const wallThick = 0.02;
+            const fl = new THREE.Mesh(new THREE.BoxGeometry(w, wallThick, d), matInterior); fl.position.y = -h / 2 + wallThick / 2; g.add(fl);
+            const lw = new THREE.Mesh(new THREE.BoxGeometry(wallThick, h, d), matInterior); lw.position.x = -w / 2 + wallThick / 2; g.add(lw);
+            const rw = new THREE.Mesh(new THREE.BoxGeometry(wallThick, h, d), matInterior); rw.position.x = w / 2 - wallThick / 2; g.add(rw);
+            const bw = new THREE.Mesh(new THREE.BoxGeometry(w, h, wallThick), matInterior); bw.position.z = -d / 2 + wallThick / 2; g.add(bw);
+            g.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; });
+            return g;
+        }
+        const drH = (divY - 0.1) / 2, binDepth = fD - 0.15, binWidth = fW - 0.15, d1Z_closed = fD / 2, d2Z_closed = fD / 2;
+        const d1G = new THREE.Group(); d1G.name = "DRAWER_1"; d1G.position.set(0, divY - drH / 2 - 0.02, d1Z_closed); fGroup.add(d1G);
+        d1G.add(new THREE.Mesh(new RoundedBoxGeometry(fW - 0.02, drH - 0.02, dD_door, 4, 0.01), matExterior));
+        const bin1 = createDrawerBin(binWidth, drH - 0.05, binDepth); bin1.position.z = -binDepth / 2 - dD_door / 2; d1G.add(bin1);
+        // make bin interior icy blue
+        bin1.children.forEach(c => { if (c.material) c.material = matIcy; });
+        // helper to add many ice blocks and some simple frozen fish into a bin
+        function addIceAndFish(bin, w, h, d, iceCount = 10) {
+            const iceMat = new THREE.MeshPhysicalMaterial({ color: 0xeaf6ff, transmission: 0.75, transparent: true, opacity: 0.75, roughness: 0.12 });
+            const fishMat = new THREE.MeshStandardMaterial({ color: 0x9fd0e0, roughness: 0.5 });
+            // spawn multiple random ice blocks
+            for (let i = 0; i < iceCount; i++) {
+                const iw = 0.03 + Math.random() * 0.06; const ih = 0.02 + Math.random() * 0.06; const id = 0.03 + Math.random() * 0.06;
+                const ix = (Math.random() * 0.9 - 0.45) * w;
+                const iz = - (0.08 + Math.random() * 0.36) * d;
+                const ice = new THREE.Mesh(new THREE.BoxGeometry(iw, ih, id), iceMat);
+                ice.position.set(ix, -h / 2 + ih / 2 + 0.01, iz);
+                ice.castShadow = true; ice.receiveShadow = true; bin.add(ice);
+            }
+            // add a couple of simple frozen fish for variety
+            const fish = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.04), fishMat); fish.rotation.z = 0.12; fish.position.set(w * 0.22, -h / 2 + 0.05, -d * 0.1); fish.castShadow = true; bin.add(fish);
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.005, 8, 8), matPupil); eye.position.set(0.04, 0.005, 0.02); fish.add(eye);
+            const fish2 = fish.clone(); fish2.position.set(-w * 0.22, -h / 2 + 0.05, -d * 0.12); bin.add(fish2);
+        }
+        // populate drawer 1
+        addIceAndFish(bin1, binWidth, drH - 0.05, binDepth, 12);
+
+        // handle for drawer 1 (attached to group so moves with it)
+        const handle1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.04), matDark); handle1.position.set(0, 0, dD_door / 2 + 0.01); handle1.name = 'DRAWER_HANDLE_1'; d1G.add(handle1);
+        const grip1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.02), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 })); grip1.position.set(0, 0, dD_door / 2 + 0.03); d1G.add(grip1);
+
+        const d2G = new THREE.Group(); d2G.name = "DRAWER_2"; d2G.position.set(0, divY - drH * 1.5 - 0.04, d2Z_closed); fGroup.add(d2G);
+        d2G.add(new THREE.Mesh(new RoundedBoxGeometry(fW - 0.02, drH - 0.02, dD_door, 4, 0.01), matExterior));
+        const bin2 = createDrawerBin(binWidth, drH - 0.05, binDepth); bin2.position.z = -binDepth / 2 - dD_door / 2; d2G.add(bin2);
+        // make bin interior icy blue
+        bin2.children.forEach(c => { if (c.material) c.material = matIcy; });
+        // populate drawer 2
+        addIceAndFish(bin2, binWidth, drH - 0.05, binDepth, 12);
+        // handle for drawer 2 (attached to group so moves with it)
+        const handle2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.04), matDark); handle2.position.set(0, 0, dD_door / 2 + 0.01); handle2.name = 'DRAWER_HANDLE_2'; d2G.add(handle2);
+        const grip2 = grip1.clone(); grip2.position.set(0, 0, dD_door / 2 + 0.03); d2G.add(grip2);
+
+        // --- 6. BUTTON & APPLE ---
+        const btnG = new THREE.Group();
+        btnG.name = "BUTTON";
+        btnG.position.set(0.9, 0, -1.1);
+        btnG.rotation.y = -0.5;
+        scene.add(btnG);
+
+
+
+        // ================= PERSON MODEL =================
+
+        // ---- Materials (human only)
+        const matHumanSkin = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+        const matClothes = new THREE.MeshStandardMaterial({ color: 0x3366cc });
+        const matPants = new THREE.MeshStandardMaterial({ color: 0x444444 });
+
+        // ---- Legs (grounded)
+        const legHeight = 0.75;
+
+        // Left leg
+        const leftLeg = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.06, legHeight, 10),
+            matPants
+        );
+        leftLeg.position.set(-0.07, legHeight / 2, 0);
+        btnG.add(leftLeg);
+
+        // Right leg
+        const rightLeg = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.06, legHeight, 10),
+            matPants
+        );
+        rightLeg.position.set(0.07, legHeight / 2, 0);
+        btnG.add(rightLeg);
+
+        // ---- Body root (hips)
+        const bodyRoot = new THREE.Group();
+        bodyRoot.position.y = legHeight;
+        btnG.add(bodyRoot);
+
+        // ---- Torso
+        const torsoHeight = 0.55;
+        const torso = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.11, 0.13, torsoHeight, 12),
+            matClothes
+        );
+        torso.position.y = torsoHeight / 2;
+        bodyRoot.add(torso);
+
+        // ---- Head
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 16, 16),
+            matHumanSkin
+        );
+        head.position.y = torsoHeight + 0.1;
+        bodyRoot.add(head);
+
+        // ---- Arms
+        function makeArm(x) {
+            const armPivot = new THREE.Group();
+            armPivot.position.set(x, torsoHeight, 0);
+            bodyRoot.add(armPivot);
+
+            const arm = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.035, 0.04, 0.3, 8),
+                matHumanSkin
+            );
+            arm.position.y = -0.16;
+            arm.rotation.z = Math.PI / 2;
+            armPivot.add(arm);
+
+            return armPivot;
+        }
+
+        btnG.armPivot = makeArm(0.17); // right arm (throwing)
+        makeArm(-0.17);               // left arm
+
+
+
+        // helper to compute projectile initial velocity for given time and gravity
+        function computeInitialVelocity(start, target, t_f, gravity) {
+            // v0 = (target - start - 0.5*g*t_f^2) / t_f
+            const temp = new THREE.Vector3(); temp.copy(target).sub(start);
+            const gterm = gravity.clone().multiplyScalar(0.5 * t_f * t_f);
+            temp.sub(gterm).divideScalar(t_f);
+            return temp;
+        }
+
+        const apple = new THREE.Group(); apple.visible = false; scene.add(apple); apple.position.set(0, -20, 0); // park apple underground on load
+        const appleMesh = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshStandardMaterial({ color: 0xaa2222, roughness: 0.3 }));
+        appleMesh.castShadow = true; apple.add(appleMesh);
+        apple.add(new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.03), new THREE.MeshStandardMaterial({ color: 0x331100 })).translateY(0.05));
+
+        // --- 7. LOGIC ---
+        const ambL = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambL);
+
+        const sunL = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunL.position.set(5, 8, 5);
+        sunL.castShadow = true;
+        scene.add(sunL);
+
+
+
+        const ray = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+        let st = {
+            rOpen: false,
+            lOpen: false,
+            d1Open: false,
+            d2Open: false,
+            anim: false,
+            sit: false,      // NEW: track sitting state
+            sitFactor: 0,    // NEW: animation progress (0 to 1)
+            t: 0,
+            throwT: 0
+        };
+
+        const phoneUI = document.getElementById('phone');
+        const phoneCloseBtn = document.getElementById('phone-close');
+        function showPhone() {
+            if (!phoneUI) return;
+            phoneUI.classList.remove('phone-closing');
+            phoneUI.style.display = 'block';
+            // allow layout, then add open class to start transition
+            requestAnimationFrame(() => requestAnimationFrame(() => phoneUI.classList.add('phone-open')));
+        }
+        function hidePhone() {
+            if (!phoneUI) return;
+            phoneUI.classList.remove('phone-open');
+            phoneUI.classList.add('phone-closing');
+            const onEnd = (ev) => {
+                if (ev.propertyName === 'transform') {
+                    phoneUI.style.display = 'none';
+                    phoneUI.classList.remove('phone-closing');
+                    phoneUI.removeEventListener('transitionend', onEnd);
+                }
+            };
+            phoneUI.addEventListener('transitionend', onEnd);
+        }
+        if (phoneCloseBtn) {
+            phoneCloseBtn.addEventListener('click', (ev) => { ev.stopPropagation(); ev.preventDefault(); hidePhone(); });
+        }
+        // Note: Escape key no longer hides the phone, to keep it visible until user presses ×
+
+
+        window.onclick = (e) => {
+            mouse.x = (e.clientX / innerWidth) * 2 - 1; mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+            ray.setFromCamera(mouse, camera);
+            
+            // Added mrGold to the intersection list
+            const hits = ray.intersectObjects([fGroup, btnG, mrGold], true);
+            
+            if (hits.length > 0) {
+                let obj = hits[0].object;
+                
+                // Traverse up to find the group name
+                let rootObj = obj;
+                while (rootObj.parent && rootObj.name === "" && rootObj.parent.type !== "Scene") {
+                    rootObj = rootObj.parent;
+                }
+                const n = rootObj.name;
+
+                if (n === "DOOR_LEFT") st.lOpen = !st.lOpen;
+                else if (n === "DOOR_RIGHT" && !st.anim) st.rOpen = !st.rOpen;
+                else if (n === "DRAWER_1") st.d1Open = !st.d1Open;
+                else if (n === "DRAWER_2") st.d2Open = !st.d2Open;
+                else if (n === "MR_GOLD") st.sit = !st.sit; // NEW: Toggle sit
+                else if (n === "BUTTON" && !st.anim) {
+                    // ... (existing button logic remains unchanged) ...
+                    st.anim = true;
+                    st.throwT = 0;
+                    st.t = 0;
+                    st.rOpen = true;
+                    apple.visible = true;
+                    const worldP0 = new THREE.Vector3(); btnG.getWorldPosition(worldP0);
+                    const targetShelfIdx = Math.min(Math.floor(shelfYs.length / 2), shelfYs.length - 1);
+                    const targetY = shelfYs[targetShelfIdx] + 0.05;
+                    const targetZ = fGroup.position.z - 0.18; 
+                    const worldTarget = new THREE.Vector3(0, targetY, targetZ);
+                    const t_f = 1.2; 
+                    const gravity = new THREE.Vector3(0, -9.8, 0);
+                    const v0 = computeInitialVelocity(worldP0, worldTarget, t_f, gravity);
+                    st.proj = { start: worldP0.clone(), v0: v0, g: gravity, t_f: t_f, target: worldTarget };
+                    apple.position.copy(worldP0);
+                }
+            }
+        };
+
+        const clock = new THREE.Clock();
+       /* const P0 = new THREE.Vector3(1.4, 1.2, 0.8);
+        // compute shelf 2 world position so apple lands on middle shelf
+        const shelfIndex = 2; // 1-based index used when shelves were created
+        const P2 = new THREE.Vector3(0.0, divY + (shelfIndex * 0.25) + 0.1 + 0.02, fGroup.position.z - 0.05);
+        const P3 = new THREE.Vector3(0.0, divY + (shelfIndex * 0.25) + 0.1 + 0.02, fGroup.position.z - 0.25);
+        const P1 = new THREE.Vector3(0.7, 2.5, -0.5);*/
+
+        function loop() {
+            requestAnimationFrame(loop);
+            const dt = Math.min(clock.getDelta(), 0.1);
+            const time = Date.now() * 0.005;
+            const lerpSpeed = dt * 5.0;
+
+            // --- 1. EXISTING: Door & Drawer Animation ---
+            lHinge.rotation.y += ((st.lOpen ? -Math.PI / 2 - 0.2 : 0) - lHinge.rotation.y) * lerpSpeed;
+            rHinge.rotation.y += ((st.rOpen ? Math.PI / 2 + 0.2 : 0) - rHinge.rotation.y) * lerpSpeed;
+            d1G.position.z += ((d1Z_closed + (st.d1Open ? 0.5 : 0)) - d1G.position.z) * lerpSpeed;
+            d2G.position.z += ((d2Z_closed + (st.d2Open ? 0.5 : 0)) - d2G.position.z) * lerpSpeed;
+
+            // --- 2. NEW: Mr. Gold Sitting Animation ---
+            // Calculate sit factor (0.0 = Standing, 1.0 = Sitting)
+            const targetSit = st.sit ? 1.0 : 0.0;
+            st.sitFactor += (targetSit - st.sitFactor) * dt * 8.0;
+
+            const sf = st.sitFactor;
+            const parts = mrGold.userData;
+
+            // Only animate if we successfully saved the parts in Step 1
+            if (parts.body && parts.head && parts.legs && parts.legs.length === 4) {
+                // A. Lower the Body (Standard Y: 0.45 -> Sit Y: 0.3)
+                parts.body.position.y = 0.45 - (0.15 * sf);
+                
+                // B. Tilt Body Upwards (Rotate on X axis: 0 -> -0.7 rads)
+                parts.body.rotation.x = -0.7 * sf;
+                
+                // C. Adjust Head Position (Counteract body tilt so neck stays attached)
+                parts.head.position.y = 0.7 - (0.2 * sf);
+                parts.head.position.z = 0.4 - (0.15 * sf);
+                
+                // D. Rotate Head Down (Keep looking forward instead of at the sky)
+                parts.head.rotation.x = 0.7 * sf;
+
+                // E. Animate Back Legs (Indices 2 & 3) to "fold" forward
+                const legRot = -1.5 * sf;            // Rotate legs forward
+                const legY = 0.225 - (0.16 * sf);    // Lower leg center
+                const legZ = -0.25 + (0.3 * sf);     // Slide leg center forward
+                
+                // Back Left
+                parts.legs[2].rotation.x = legRot;
+                parts.legs[2].position.y = legY;
+                parts.legs[2].position.z = legZ;
+                
+                // Back Right
+                parts.legs[3].rotation.x = legRot;
+                parts.legs[3].position.y = legY;
+                parts.legs[3].position.z = legZ;
+
+                //tail
+                tailPivot.position.y = 0.65 - (0.35 * sf);
+
+                //Coller
+                collar.rotation.x = Math.PI / 2 + 0.7 * sf;
+            }
+            
+            // --- 3. EXISTING: Idle Animations (Tail & Head Wobble) ---
+            tailPivot.rotation.y = Math.sin(time * 2) * 0.4;
+            // Add slight head bob (Z-axis) on top of the sit rotation
+            if(parts.head) parts.head.rotation.z = Math.sin(time) * 0.05;
+
+
+            // --- 4. EXISTING: Person & Apple Logic ---
+            if (st.anim) {
+                if (btnG.armPivot) {
+                    st.throwT += dt * 6;
+                    const swing = Math.sin(Math.min(st.throwT, Math.PI));
+                    btnG.armPivot.rotation.z = -swing * 1.2;
+                }
+
+                // Projectile Physics
+                if (st.proj) {
+                    st.proj.t = (st.proj.t || 0) + dt;
+                    const tnow = st.proj.t;
+                    const t_f = st.proj.t_f;
+                    const g = st.proj.g;
+                    
+                    // Position: p = p0 + v0*t + 0.5*g*t^2
+                    const pos = new THREE.Vector3();
+                    pos.copy(st.proj.start)
+                       .add(st.proj.v0.clone().multiplyScalar(tnow))
+                       .add(g.clone().multiplyScalar(0.5 * tnow * tnow));
+                    apple.position.copy(pos);
+                    
+                    // Rotation
+                    apple.rotation.x = Math.sin(tnow * 8) * 0.5;
+                    apple.rotation.z = Math.cos(tnow * 12) * 2;
+                    
+                    // Landing Logic
+                    if (tnow >= t_f || apple.position.y <= st.proj.target.y + 0.02) {
+                        apple.position.copy(st.proj.target);
+                        apple.rotation.set(0, 0, 0);
+                        
+                        if (!st._landTimer) st._landTimer = 0; 
+                        st._landTimer += dt;
+                        
+                        if (st._landTimer > 0.25) {
+                            if (phoneUI.style.display !== 'block') showPhone();
+                            st.proj = null;
+                            st._landTimer = 0;
+                            st.rOpen = false;
+                            st.anim = false;
+                            st.throwT = 0;
+                            if(btnG.armPivot) btnG.armPivot.rotation.z = 0;
+                        }
+                    }
+                } 
+            } else if (!apple.visible) {
+                apple.position.set(0, -10, 0);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        loop();
+        window.onresize = () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); };
+    </script>
+</body>
+</html>
